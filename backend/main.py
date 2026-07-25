@@ -1,32 +1,21 @@
-from speech.recorder import record_audio
-from speech.stt import speech_to_text
-
-from ai.llm import LLM
-
-assistant = LLM()
+from core.engine import AuraEngine
+from speech.speech_service import SpeechService
+from brain.brain_service import BrainService
+from actions.action_service import ActionService
+from runtime.runtime_service import RuntimeService
+from speech.input_service import InputService
 
 
 def main():
+    engine = AuraEngine()
 
-    print("=" * 50)
-    print("AURA Voice Assistant")
-    print("=" * 50)
+    engine.register("speech", SpeechService(engine.bus))
+    engine.register("brain", BrainService(engine.bus))
+    engine.register("action", ActionService(engine.bus))
+    engine.register("runtime", RuntimeService(engine.bus))
+    engine.register("input", InputService(engine.bus))
 
-    input("Press ENTER to speak...")
-
-    audio = record_audio()
-
-    print("\nTranscribing...\n")
-
-    user_text = speech_to_text(audio)
-
-    print("You:", user_text)
-
-    print("\nThinking...\n")
-
-    reply = assistant.chat(user_text)
-
-    print("AURA:", reply)
+    engine.start()
 
 
 if __name__ == "__main__":
