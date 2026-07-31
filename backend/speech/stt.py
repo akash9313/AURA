@@ -1,21 +1,62 @@
-from faster_whisper import WhisperModel
+import logging
+import sys
 
-print("Loading Whisper model...")
+logger = logging.getLogger("AURA.Speech.STT")
 
-model = WhisperModel(
-    "base",
-    device="cpu",
-    compute_type="int8"
-)
+_model = None
+_stt_error = None
 
-print("Whisper model loaded successfully!")
 
-def speech_to_text(audio_path):
-    segments, info = model.transcribe(audio_path)
+def _get_model():
+    global _model, _stt_error
+    if _model is not None:
+        return _model
+    if _stt_error is not None:
+        return None
 
-    text = ""
+    try:
+        from faster_whisper import WhisperModel
 
-    for segment in segments:
-        text += segment.text
+        _model = WhisperModel(
+            "base",
+            device="cpu",
+            compute_type="int8"
+        )
+        logger.info("Whisper model loaded successfully!")
+        return _model
+    except Exception as e:
+        _stt_error = e
+        logger.warning(f"faster_whisper failed to load: {e}. STT will use SpeechRecognition fallback.")
+        return None
 
-    return text.strip()
+
+def speech_to_text(audio_path: str) -> str:
+    """
+    Transcribe given WAV audio file into text using Whisper or SpeechRecognition.
+    """
+    # 1. Try faster_whisper if available
+    model = _get_model()
+    if model is not None:
+        try:
+            segments, info = model.transcribe(audio_path)
+            text = "".join(segment.text for segment in segments).strip()
+            if text:
+                return text
+        except Exception as e:
+            logger.error(f"Whisper transcription error: {e}")
+
+    # 2. Fallback to SpeechRecognition (Google Web Speech API)
+    try:
+        import speech_recognition as sr
+        recognizer = sr.Recognizer()
+        with sr.AudioFile(audio_path) as source:
+            audio_data = recognizer.record(source)
+            text = recognizer.recognize_google(audio_data)
+            logger.info(f"SpeechRecognition transcribed: '{text}'")
+            return text.strip()
+    except Exception as e:
+        # Avoid spamming errors when audio is silent
+        if "UnknownValueError" not in type(e).__name__:
+            logger.debug(f"SpeechRecognition transcription result: {e}")
+        return ""
+

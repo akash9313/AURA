@@ -6,10 +6,17 @@ from ai.prompts import SYSTEM_PROMPT
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 
-def ask_gemini(user_message):
+def ask_gemini(arg1, arg2=None):
+
+    if arg2 is not None:
+        sys_prompt = arg1
+        user_message = arg2
+    else:
+        sys_prompt = SYSTEM_PROMPT
+        user_message = arg1
 
     prompt = f"""
-{SYSTEM_PROMPT}
+{sys_prompt}
 
 User:
 {user_message}

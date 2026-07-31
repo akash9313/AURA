@@ -13,11 +13,15 @@ class InputService(Service):
 
         while True:
 
-            input("\nPress ENTER to speak...")
+            user_choice = input("\nPress ENTER to speak (or type 't' to type input): ")
 
-            audio = record_audio()
-
-            text = speech_to_text(audio)
+            if user_choice.strip().lower() == 't':
+                text = input("\n👤 Enter text: ").strip()
+            else:
+                audio = record_audio()
+                text = speech_to_text(audio)
+                if not text:
+                    text = input("⚠️ Speech recognition was empty or unavailable. Type your prompt: ").strip()
 
             if text:
 
@@ -30,4 +34,4 @@ class InputService(Service):
 
     def stop(self):
 
-        print("Input Service Stopped")
+        print("Input Service Stopped")
