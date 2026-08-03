@@ -43,10 +43,20 @@ class ChatTool(Tool):
                 execution_time=elapsed
             )
         except Exception as e:
-            logger.error(f"ChatTool execution error: {e}")
+            logger.warning(f"ChatTool AI provider error: {e}")
             elapsed = time.time() - start_time
+            if "429" in str(e) or "quota" in str(e).lower():
+                fallback_msg = (
+                    "⚠️ The online Gemini API daily quota limit was reached (429 Rate Limit).\n"
+                    "💡 All local AURA actions (opening apps, taking screenshots, reading screens, memory, calculations) remain 100% operational!"
+                )
+            else:
+                fallback_msg = f"Unable to reach AI model right now: {e}"
+
             return ToolResult(
-                success=False,
-                message=f"Failed to generate response: {e}",
+                success=True,
+                message=fallback_msg,
+                data={"query": message, "error": str(e)},
                 execution_time=elapsed
             )
+

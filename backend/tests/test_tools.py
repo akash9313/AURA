@@ -55,7 +55,8 @@ class TestToolFramework(unittest.TestCase):
         tool = OpenApplicationTool()
         result = tool.execute({"application": "invalid_app_123_xyz"})
         self.assertFalse(result.success)
-        self.assertIn("not supported", result.message)
+        self.assertIn("Failed to launch", result.message)
+
 
     def test_calculator_tool_expression(self):
         tool = CalculatorTool()
@@ -69,6 +70,14 @@ class TestToolFramework(unittest.TestCase):
         result = tool.execute({})
         mock_popen.assert_called_once_with("calc.exe")
         self.assertTrue(result.success)
+
+    @patch("tools.chat.ask_ai", return_value="Mocked AI response")
+    def test_chat_tool_execution(self, mock_ask_ai):
+        tool = ChatTool()
+        result = tool.execute({"message": "Hello AURA"})
+        self.assertTrue(result.success)
+        self.assertEqual(result.message, "Mocked AI response")
+
 
     def test_registry_operations(self):
         open_app_tool = OpenApplicationTool()

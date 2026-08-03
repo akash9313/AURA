@@ -1,0 +1,17 @@
+# AURA Global Codeowners
+
+* @akash9313
+
+# Core Architecture & Engine
+/backend/core/ @akash9313
+/backend/agent/ @akash9313
+/backend/cognition/ @akash9313
+
+# Subsystem Modules
+/backend/memory/ @akash9313
+/backend/vision/ @akash9313
+/backend/windows/ @akash9313
+/backend/browser/ @akash9313
+
+# Frontend Desktop Shell
+/frontend/ @akash9313

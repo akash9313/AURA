@@ -1,0 +1,33 @@
+[tool.black]
+line-length = 120
+target-version = ['py314']
+include = '\.pyi?$'
+
+[tool.ruff]
+line-length = 120
+target-version = "py314"
+select = ["E", "F", "W", "B", "I"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.14"
+strict = false
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = font
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q --cov=backend"
+testpaths = [
+    "backend/tests",
+]
+
+[tool.coverage.run]
+source = ["backend"]
+omit = ["backend/tests/*"]
+
+[tool.bandit]
+targets = ["backend"]
+exclude_dirs = ["backend/tests"]
+skips = ["B101"]

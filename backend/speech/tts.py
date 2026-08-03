@@ -1,19 +1,22 @@
-from speech.providers.piper_provider import speak_piper
-from speech.providers.elevenlabs_provider import speak_elevenlabs
-from speech.providers.azure_provider import speak_azure
+import logging
+
+logger = logging.getLogger("AURA.Speech.TTS")
 
 
 class TTS:
-    def __init__(self, provider="piper"):
+    """
+    Text-to-Speech manager using edge_provider or fallbacks.
+    """
+
+    def __init__(self, provider: str = "edge"):
         self.provider = provider
 
-    def speak(self, text, output_file="output.wav"):
-        """
-        Synthesize text into speech using the configured provider.
-        """
-        if self.provider == "elevenlabs":
-            return speak_elevenlabs(text, output_file=output_file)
-        elif self.provider == "azure":
-            return speak_azure(text, output_file=output_file)
-        else:
-            return speak_piper(text, output_file=output_file)
+    def speak(self, text: str, output_file: str = "output.wav") -> str:
+        """Synthesize speech using selected provider."""
+        try:
+            from speech.providers.edge_provider import speak as speak_edge
+            speak_edge(text)
+            return output_file
+        except Exception as e:
+            logger.error(f"TTS synthesis error: {e}")
+            return ""

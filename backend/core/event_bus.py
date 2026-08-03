@@ -13,7 +13,9 @@ class EventBus:
 
     def publish(self, event, data=None):
 
-        print(f"\n📢 EVENT -> {event.name}")
+        event_name = event.name if hasattr(event, "name") else str(event)
+        print(f"[EVENT] -> {event_name}")
+
 
         for callback in self.listeners[event]:
 
