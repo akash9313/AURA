@@ -10,8 +10,12 @@ from agent.service import AgentService
 from windows.service import WindowsService
 from browser.service import BrowserService
 from cognition.service import CognitiveService
+from cloud.service import CloudService
 from computer.service import ComputerUseService
+from developer.service import DeveloperService
+from knowledge.service import KnowledgeService
 from learning.service import LearningService
+from plugins.service import PluginService
 from workflow.service import WorkflowService
 
 
@@ -26,11 +30,19 @@ def main():
     engine.register("agent", AgentService(engine.bus))
     engine.register("workflow", WorkflowService(engine.bus))
     engine.register("learning", LearningService(engine.bus))
+    engine.register("developer", DeveloperService(engine.bus))
+    engine.register("knowledge", KnowledgeService(engine.bus))
+    engine.register("plugins", PluginService(engine.bus))
+    engine.register("cloud", CloudService(engine.bus))
     engine.register("windows", WindowsService(engine.bus))
     engine.register("browser", BrowserService(engine.bus))
     engine.register("computer", ComputerUseService(engine.bus))
     engine.register("action", ActionService(engine.bus))
     engine.register("runtime", RuntimeService(engine.bus))
+
+
+
+
 
 
 
