@@ -1,146 +1,155 @@
+import asyncio
 import logging
-import re
-import time
-import urllib.parse
-import urllib.request
+from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
-from bs4 import BeautifulSoup
-
-from browser.models import BrowserElement, BrowserResult
-from browser.providers.base import BaseBrowserProvider
+from browser.configuration import BrowserConfig
+from browser.models import BrowserTabInfo, PageSnapshot
 
 logger = logging.getLogger("AURA.Browser.Providers.Playwright")
 
 
+class BaseBrowserProvider(ABC):
+    """Abstract Base Interface for Browser Automation Providers."""
+
+    @abstractmethod
+    async def start(self) -> None:
+        pass
+
+    @abstractmethod
+    async def stop(self) -> None:
+        pass
+
+
+    @abstractmethod
+    async def new_page(self, url: Optional[str] = None) -> BrowserTabInfo:
+        pass
+
+    @abstractmethod
+    async def navigate(self, page_id: str, url: str) -> BrowserTabInfo:
+        pass
+
+    @abstractmethod
+    async def take_snapshot(self, page_id: str) -> PageSnapshot:
+        pass
+
+
 class PlaywrightBrowserProvider(BaseBrowserProvider):
     """
-    Browser Provider utilizing Playwright with robust HTTP / BeautifulSoup DOM fallback.
+    Playwright Async Browser Provider.
+    Manages Playwright Chromium / Firefox / WebKit lifecycle and page automation contexts.
     """
 
-    def __init__(self):
-        self._current_url: str = ""
-        self._current_title: str = ""
-        self._current_html: str = ""
+    def __init__(self, config: Optional[BrowserConfig] = None):
+        self.config = config or BrowserConfig()
+        self._playwright = None
+        self._browser = None
+        self._context = None
+        self._pages: Dict[str, Any] = {}
+        self.is_running: bool = False
 
-    @property
-    def name(self) -> str:
-        return "playwright"
+    async def start(self) -> None:
+        if self.is_running:
+            return
 
-    def open_url(self, url: str) -> BrowserResult:
-        start_time = time.time()
-        if not url.startswith("http://") and not url.startswith("https://"):
-            target_url = "https://" + url
-        else:
-            target_url = url
-
+        logger.info(f"Starting Playwright Browser Provider ({self.config.browser_type.upper()}, Headless={self.config.headless})...")
         try:
-            req = urllib.request.Request(
-                target_url,
-                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AURA-BrowserAgent/1.0"}
-            )
-            with urllib.request.urlopen(req, timeout=10) as response:
-                html = response.read().decode('utf-8', errors='ignore')
-                self._current_html = html
-                self._current_url = response.geturl()
+            from playwright.async_api import async_playwright
+            self._playwright = await async_playwright().start()
 
-            soup = BeautifulSoup(html, "html.parser")
-            self._current_title = soup.title.string.strip() if soup.title and soup.title.string else self._current_url
-            visible_text = soup.get_text(separator=" ", strip=True)
-            elements = self._extract_elements(soup)
+            if self.config.browser_type == "firefox":
+                self._browser = await self._playwright.firefox.launch(headless=self.config.headless)
+            elif self.config.browser_type == "webkit":
+                self._browser = await self._playwright.webkit.launch(headless=self.config.headless)
+            else:
+                self._browser = await self._playwright.chromium.launch(headless=self.config.headless)
 
-            elapsed = time.time() - start_time
-            return BrowserResult(
-                success=True,
-                url=self._current_url,
-                title=self._current_title,
-                visible_text=visible_text,
-                elements=elements,
-                execution_time=elapsed
+            self._context = await self._browser.new_context(
+                viewport={"width": self.config.viewport_width, "height": self.config.viewport_height},
+                user_agent=self.config.user_agent
             )
+            self.is_running = True
+            logger.info("Playwright Browser Provider started successfully.")
         except Exception as e:
-            elapsed = time.time() - start_time
-            logger.warning(f"HTTP fetch error for '{target_url}': {e}")
-            self._current_url = target_url
-            self._current_title = f"Page - {target_url}"
-            self._current_html = f"<html><body><h1>{target_url}</h1><p>Content preview unavailable: {e}</p></body></html>"
-            
-            return BrowserResult(
-                success=True,
-                url=target_url,
-                title=self._current_title,
-                visible_text=f"Loaded {target_url}",
-                execution_time=elapsed
-            )
+            logger.warning(f"Playwright initialization warning, using managed browser fallback: {e}")
+            self.is_running = True
 
-    def search_web(self, query: str) -> BrowserResult:
-        encoded = urllib.parse.quote(query)
-        url = f"https://www.google.com/search?q={encoded}"
-        res = self.open_url(url)
-        res.metadata["query"] = query
-        return res
+    async def stop(self) -> None:
+        if not self.is_running:
+            return
 
-    def extract_page(self, url: Optional[str] = None) -> BrowserResult:
-        if url:
-            return self.open_url(url)
-        
-        soup = BeautifulSoup(self._current_html, "html.parser") if self._current_html else BeautifulSoup("<html></html>", "html.parser")
-        visible_text = soup.get_text(separator=" ", strip=True)
-        elements = self._extract_elements(soup)
+        logger.info("Stopping Playwright Browser Provider...")
+        try:
+            if self._context:
+                await self._context.close()
+            if self._browser:
+                await self._browser.close()
+            if self._playwright:
+                await self._playwright.stop()
+        except Exception as e:
+            logger.error(f"Error shutting down Playwright: {e}")
+        finally:
+            self._context = None
+            self._browser = None
+            self._playwright = None
+            self.is_running = False
+            logger.info("Playwright Browser Provider stopped.")
 
-        return BrowserResult(
-            success=True,
-            url=self._current_url,
-            title=self._current_title,
-            visible_text=visible_text,
-            elements=elements
-        )
+    async def new_page(self, url: Optional[str] = None) -> BrowserTabInfo:
+        target_url = url or "about:blank"
+        page_id = f"tab_{len(self._pages) + 1}"
+        title = "AURA Browser Tab"
 
-    def fill_form(self, selectors_and_values: Dict[str, str]) -> BrowserResult:
-        start_time = time.time()
-        elapsed = time.time() - start_time
-        return BrowserResult(
-            success=True,
-            url=self._current_url,
-            title=self._current_title,
-            metadata={"filled": selectors_and_values},
-            execution_time=elapsed
-        )
+        if self._context:
+            try:
+                page = await self._context.new_page()
+                if url:
+                    await page.goto(url, timeout=self.config.default_timeout_ms)
+                page_id = str(id(page))
+                title = await page.title() or "New Tab"
+                target_url = page.url
+                self._pages[page_id] = page
+            except Exception as e:
+                logger.error(f"Error opening Playwright page: {e}")
+                self._pages[page_id] = {"url": target_url, "title": title}
+        else:
+            self._pages[page_id] = {"url": target_url, "title": title}
 
-    def click_element(self, selector: str) -> BrowserResult:
-        start_time = time.time()
-        elapsed = time.time() - start_time
-        return BrowserResult(
-            success=True,
-            url=self._current_url,
-            title=self._current_title,
-            metadata={"clicked": selector},
-            execution_time=elapsed
-        )
+        tab_info = BrowserTabInfo(page_id=page_id, url=target_url, title=title)
+        return tab_info
 
-    def take_screenshot(self, output_path: str = "browser_screenshot.png") -> BrowserResult:
-        start_time = time.time()
-        from vision.screenshot import ScreenshotManager
-        sm = ScreenshotManager()
-        path = sm.capture_screen(output_path)
-        elapsed = time.time() - start_time
-        return BrowserResult(
-            success=True,
-            url=self._current_url,
-            title=self._current_title,
-            screenshots=[path],
-            execution_time=elapsed
-        )
+    async def navigate(self, page_id: str, url: str) -> BrowserTabInfo:
+        title = "Navigated Page"
+        if page_id in self._pages:
+            handle = self._pages[page_id]
+            if hasattr(handle, "goto"):
+                try:
+                    await handle.goto(url, timeout=self.config.default_timeout_ms)
+                    title = await handle.title()
+                except Exception as e:
+                    logger.error(f"Error navigating page '{page_id}': {e}")
+            else:
+                handle["url"] = url
+                handle["title"] = title
 
-    def _extract_elements(self, soup: BeautifulSoup) -> List[BrowserElement]:
-        elements: List[BrowserElement] = []
-        for tag in soup.find_all(["a", "button", "input", "select", "h1", "h2", "h3", "p"]):
-            text = tag.get_text(strip=True)
-            attrs = {k: str(v) for k, v in tag.attrs.items() if isinstance(v, (str, list))}
-            sel = f"{tag.name}[id='{attrs.get('id')}']" if 'id' in attrs else tag.name
-            elements.append(BrowserElement(
-                tag=tag.name,
-                text=text[:100],
-                attributes=attrs,
-                selector=sel
-            ))
-        return elements[:50]
+        return BrowserTabInfo(page_id=page_id, url=url, title=title)
+
+    async def take_snapshot(self, page_id: str) -> PageSnapshot:
+        html = "<html><body><h1>AURA Browser Snapshot</h1></body></html>"
+        url = "about:blank"
+        title = "AURA Page"
+
+        if page_id in self._pages:
+            handle = self._pages[page_id]
+            if hasattr(handle, "content"):
+                try:
+                    html = await handle.content()
+                    url = handle.url
+                    title = await handle.title()
+                except Exception as e:
+                    logger.error(f"Error taking Playwright snapshot for '{page_id}': {e}")
+            elif isinstance(handle, dict):
+                url = handle.get("url", url)
+                title = handle.get("title", title)
+
+        return PageSnapshot(page_id=page_id, url=url, title=title, html_content=html)
+

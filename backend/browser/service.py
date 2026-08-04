@@ -1,59 +1,102 @@
+import asyncio
 import logging
-from core.events import Event
+import threading
+from typing import Optional
 from core.service import Service
+from browser.configuration import BrowserConfig
+from browser.events import BrowserEvent
 from browser.manager import BrowserManager
+from browser.models import BrowserTabInfo, PageSnapshot
 
-logger = logging.getLogger("AURA.BrowserService")
+logger = logging.getLogger("AURA.Browser.Service")
 
 
 class BrowserService(Service):
     """
-    BrowserService connects the BrowserManager facade to the AURA EventBus.
+    Browser Automation Service.
+    Starts with AURA Runtime, manages Chromium/Firefox/WebKit lifecycle, and executes browser automation tasks.
+    Exposes browser capabilities through interfaces only.
     """
 
-    def __init__(self, bus, manager: BrowserManager = None):
+    def __init__(self, bus, config: Optional[BrowserConfig] = None):
         super().__init__(bus)
-        self.manager = manager if manager is not None else BrowserManager()
+        self.config = config or BrowserConfig()
+        self.manager = BrowserManager(config=self.config)
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._thread: Optional[threading.Thread] = None
 
-    def start(self) -> None:
-        logger.info("Browser Agent Service Started")
-        self.bus.publish(Event.BROWSER_STARTED, {"status": "running"})
+    def start(self):
+        logger.info("Browser Automation Service Starting...")
+        self._thread = threading.Thread(target=self._run_event_loop, daemon=True, name="AURA-BrowserServiceThread")
+        self._thread.start()
 
-    def stop(self) -> None:
-        logger.info("Browser Agent Service Stopped")
+    def stop(self):
+        logger.info("Browser Automation Service Stopping...")
+        if self._loop and self._loop.is_running():
+            future = asyncio.run_coroutine_threadsafe(self.manager.shutdown(), self._loop)
+            try:
+                future.result(timeout=5.0)
+            except Exception as e:
+                logger.error(f"Error during async browser shutdown: {e}")
 
-    def open_url(self, url: str):
-        res = self.manager.open_url(url)
-        if res.success:
-            self.bus.publish(Event.PAGE_OPENED, {"url": url, "title": res.title})
-        return res
+        if self.bus:
+            self.bus.publish(BrowserEvent.BROWSER_STOPPED.value, {})
 
-    def search_web(self, query: str):
-        res = self.manager.search_web(query)
-        if res.success:
-            self.bus.publish(Event.PAGE_OPENED, {"query": query, "url": res.url})
-        return res
+    def _run_event_loop(self):
+        self._loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self._loop)
 
-    def extract_page(self, url: str = None):
-        res = self.manager.extract_page(url)
-        if res.success:
-            self.bus.publish(Event.PAGE_EXTRACTED, {"url": res.url, "title": res.title})
-        return res
+        try:
+            self._loop.run_until_complete(self.manager.initialize())
+            if self.bus:
+                self.bus.publish(BrowserEvent.BROWSER_STARTED.value, {"browser_type": self.config.browser_type})
+            self._loop.run_forever()
+        except Exception as e:
+            logger.error(f"Error in BrowserService event loop: {e}")
+            if self.bus:
+                self.bus.publish(BrowserEvent.BROWSER_ERROR.value, {"error": str(e)})
 
-    def fill_form(self, form_data: dict):
-        res = self.manager.fill_form(form_data)
-        if res.success:
-            self.bus.publish(Event.FORM_FILLED, {"form_data": form_data})
-        return res
+    def open_tab(self, url: Optional[str] = None) -> Optional[BrowserTabInfo]:
+        if not self._loop or not self._loop.is_running():
+            return None
 
-    def click_element(self, selector: str):
-        res = self.manager.click_element(selector)
-        if res.success:
-            self.bus.publish(Event.ELEMENT_CLICKED, {"selector": selector})
-        return res
+        future = asyncio.run_coroutine_threadsafe(self.manager.open_tab(url), self._loop)
+        try:
+            tab = future.result(timeout=10.0)
+            if self.bus and tab:
+                self.bus.publish(BrowserEvent.PAGE_NAVIGATED.value, tab.to_dict())
+            return tab
+        except Exception as e:
+            logger.error(f"Error opening browser tab: {e}")
+            return None
 
-    def download_file(self, url: str, output_path: str = "downloaded_file"):
-        res = self.manager.download_file(url, output_path)
-        if res.success:
-            self.bus.publish(Event.DOWNLOAD_COMPLETED, {"url": url, "files": res.downloads})
-        return res
+    def navigate_tab(self, page_id: str, url: str) -> Optional[BrowserTabInfo]:
+        if not self._loop or not self._loop.is_running():
+            return None
+
+        future = asyncio.run_coroutine_threadsafe(self.manager.navigate_tab(page_id, url), self._loop)
+        try:
+            tab = future.result(timeout=10.0)
+            if self.bus and tab:
+                self.bus.publish(BrowserEvent.PAGE_NAVIGATED.value, tab.to_dict())
+            return tab
+        except Exception as e:
+            logger.error(f"Error navigating browser tab: {e}")
+            return None
+
+    def get_snapshot(self, page_id: str) -> Optional[PageSnapshot]:
+        if not self._loop or not self._loop.is_running():
+            return None
+
+        future = asyncio.run_coroutine_threadsafe(self.manager.get_page_snapshot(page_id), self._loop)
+        try:
+            snapshot = future.result(timeout=10.0)
+            if self.bus and snapshot:
+                self.bus.publish(BrowserEvent.SNAPSHOT_TAKEN.value, snapshot.to_dict())
+            return snapshot
+        except Exception as e:
+            logger.error(f"Error getting page snapshot: {e}")
+            return None
+
+    def is_healthy(self) -> bool:
+        return self.manager.is_healthy()

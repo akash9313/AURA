@@ -1,22 +1,84 @@
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
+import time
 
 
-class BrowserPermissionLevel(Enum):
-    """Safety permission levels for web interactions."""
-    ALWAYS_ALLOWED = "always_allowed"
-    REQUIRES_CONFIRMATION = "requires_confirmation"
-    BLOCKED = "blocked"
+from browser.manager.models import BrowserState, ContextType
+
+
+
+@dataclass
+class BrowserTabInfo:
+    page_id: str
+    url: str
+    title: str
+    created_at: float = field(default_factory=time.time)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "page_id": self.page_id,
+            "url": self.url,
+            "title": self.title,
+            "created_at": self.created_at,
+        }
+
+
+@dataclass
+class PageSnapshot:
+    page_id: str
+    url: str
+    title: str
+    html_content: str
+    screenshot_bytes: Optional[bytes] = None
+    timestamp: float = field(default_factory=time.time)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "page_id": self.page_id,
+            "url": self.url,
+            "title": self.title,
+            "timestamp": self.timestamp,
+            "has_screenshot": self.screenshot_bytes is not None,
+        }
+
+
+@dataclass
+class BrowserElement:
+    selector: str
+    text: str = ""
+    tag_name: str = "div"
+    attributes: Dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
+class BrowserResult:
+    success: bool
+    url: str = ""
+    title: str = ""
+    content: str = ""
+    visible_text: str = ""
+    error: Optional[str] = None
+    elements: List[BrowserElement] = field(default_factory=list)
+
+
+
+@dataclass
+class BrowserSession:
+    session_id: str
+    active_url: str = ""
+    created_at: float = field(default_factory=time.time)
 
 
 class BrowserActionType(Enum):
-    """Categories of web automation operations."""
     OPEN_URL = "open_url"
+    NAVIGATE = "navigate"
     SEARCH = "search"
     EXTRACT_PAGE = "extract_page"
+    EXTRACT = "extract"
     FILL_FORM = "fill_form"
     CLICK_ELEMENT = "click_element"
+    CLICK = "click"
     DOWNLOAD = "download"
     UPLOAD = "upload"
     SWITCH_TAB = "switch_tab"
@@ -24,79 +86,13 @@ class BrowserActionType(Enum):
     SCREENSHOT = "screenshot"
 
 
-@dataclass
-class BrowserElement:
-    """Representation of an interactive DOM HTML element."""
-    tag: str
-    text: str = ""
-    attributes: Dict[str, str] = field(default_factory=dict)
-    is_visible: bool = True
-    selector: str = ""
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "tag": self.tag,
-            "text": self.text,
-            "attributes": self.attributes,
-            "is_visible": self.is_visible,
-            "selector": self.selector
-        }
+class BrowserPermissionLevel(Enum):
+    ALWAYS_ALLOWED = "always_allowed"
+    REQUIRES_CONFIRMATION = "requires_confirmation"
+    BLOCKED = "blocked"
+    READ = "read"
+    WRITE = "write"
+    ADMIN = "admin"
 
 
-@dataclass
-class BrowserCookie:
-    """Web browser session cookie representation."""
-    name: str
-    value: str
-    domain: str
-    path: str = "/"
 
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "name": self.name,
-            "value": self.value,
-            "domain": self.domain,
-            "path": self.path
-        }
-
-
-@dataclass
-class BrowserSession:
-    """Browser session context state."""
-    session_id: str
-    is_incognito: bool = False
-    cookies: List[BrowserCookie] = field(default_factory=list)
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "session_id": self.session_id,
-            "is_incognito": self.is_incognito,
-            "cookies": [c.to_dict() for c in self.cookies]
-        }
-
-
-@dataclass
-class BrowserResult:
-    """Standardized output structure for all browser operations."""
-    success: bool
-    url: str = ""
-    title: str = ""
-    visible_text: str = ""
-    elements: List[BrowserElement] = field(default_factory=list)
-    screenshots: List[str] = field(default_factory=list)
-    downloads: List[str] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    execution_time: float = 0.0
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "success": self.success,
-            "url": self.url,
-            "title": self.title,
-            "visible_text": self.visible_text[:200] if self.visible_text else "",
-            "elements": [e.to_dict() for e in self.elements[:50]],
-            "screenshots": self.screenshots,
-            "downloads": self.downloads,
-            "metadata": self.metadata,
-            "execution_time": self.execution_time
-        }

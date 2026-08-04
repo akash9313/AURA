@@ -11,8 +11,11 @@ class Event(Enum):
 
     # Streaming Voice Events
     MIC_STARTED = "mic_started"
+    MIC_STOPPED = "mic_stopped"
+    AUDIO_CHUNK = "audio_chunk"
     VOICE_STARTED = "voice_started"
     VOICE_ENDED = "voice_ended"
+
     PARTIAL_TRANSCRIPT = "partial_transcript"
     FINAL_TRANSCRIPT = "final_transcript"
     STREAMING_RESPONSE = "streaming_response"
