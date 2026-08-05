@@ -1,52 +1,77 @@
+"""
+Conversation Manager Service.
+Top-level AURA service integrating ConversationManager into kernel framework.
+Subscribes to EventBus for wake word triggers, STT transcripts, LLM responses, TTS completion, and interruptions.
+"""
+
 import logging
-from typing import Optional
-from core.events import Event
+from typing import Any, Optional
+
 from core.service import Service
-from brain.streaming.events import StreamingLLMEvent
-from conversation.coordinator import ConversationCoordinator
+from conversation.configuration import ConversationConfig
+from conversation.conversation_manager import ConversationManager
 from conversation.events import ConversationEvent
-from speech.tts.events import TTSEvent
-from speech.vad.events import VADEvent
+from conversation.models import ConversationSession, ConversationState
 
 logger = logging.getLogger("AURA.Conversation.Service")
 
 
 class ConversationService(Service):
     """
-    Full Duplex Conversation & Speech Interruption Service.
-    Coordinates VAD, STT, Streaming LLM, Streaming TTS, Audio Focus, and instant interruption recovery.
+    Service wrapper connecting ConversationManager to AURA EventBus.
     """
 
-    def __init__(self, bus):
+    def __init__(
+        self,
+        bus: Any = None,
+        config: Optional[ConversationConfig] = None,
+    ):
         super().__init__(bus)
-        self.coordinator = ConversationCoordinator(bus=bus)
+        self.config = config or ConversationConfig()
+        self.manager = ConversationManager(bus=bus, config=self.config)
+        logger.info("ConversationService initialized")
 
-    def start(self):
-        logger.info("Full Duplex Conversation Service Started.")
+    def start(self) -> None:
+        """Start ConversationService and subscribe to EventBus events."""
+        logger.info("Starting ConversationService...")
+
         if self.bus:
-            # Subscribe to pipeline events
-            self.bus.subscribe(VADEvent.VOICE_STARTED.value, self.on_voice_started)
-            self.bus.subscribe(Event.VOICE_STARTED, self.on_voice_started)
-            self.bus.subscribe(Event.TEXT_READY, self.on_text_ready)
-            self.bus.subscribe(Event.FINAL_TRANSCRIPT, self.on_text_ready)
-            self.bus.subscribe(StreamingLLMEvent.LLM_PARTIAL_TOKEN.value, self.on_llm_token)
-            self.bus.subscribe(Event.STREAMING_RESPONSE, self.on_llm_token)
-            self.bus.subscribe(TTSEvent.AUDIO_PLAY_FINISHED.value, self.on_speech_completed)
-            self.bus.subscribe(Event.SPEECH_COMPLETED, self.on_speech_completed)
+            # Subscribe to EventBus channels
+            self.bus.subscribe("wakeword_detected", self._on_wakeword_detected)
+            self.bus.subscribe("final_transcript", self._on_stt_transcript)
+            self.bus.subscribe("ai_response_ready", self._on_llm_response)
+            self.bus.subscribe("speech_completed", self._on_tts_completed)
+            self.bus.subscribe("speech_interrupted", self._on_user_interrupted)
 
-    def stop(self):
-        logger.info("Full Duplex Conversation Service Stopped.")
+    def stop(self) -> None:
+        """Stop ConversationService."""
+        logger.info("Stopping ConversationService...")
+        if self.manager:
+            self.manager.end_conversation()
 
-    def on_voice_started(self, payload: dict):
-        self.coordinator.handle_voice_started(payload)
+    def is_healthy(self) -> bool:
+        return True
 
-    def on_text_ready(self, payload: dict):
-        text = payload if isinstance(payload, str) else payload.get("text", "")
+    # ------------------------------------------------------------------
+    # EventBus Handlers
+    # ------------------------------------------------------------------
+
+    def _on_wakeword_detected(self, payload: Any) -> None:
+        ww = payload.get("wake_word", "hey aura") if isinstance(payload, dict) else "hey aura"
+        self.manager.start_conversation(wake_word=ww)
+
+    def _on_stt_transcript(self, payload: Any) -> None:
+        text = payload.get("text", "") if isinstance(payload, dict) else str(payload)
         if text:
-            self.coordinator.handle_text_ready(text)
+            self.manager.on_transcription_completed(text)
 
-    def on_llm_token(self, payload: dict):
-        self.coordinator.handle_llm_token(payload)
+    def _on_llm_response(self, payload: Any) -> None:
+        resp = payload.get("text", "") if isinstance(payload, dict) else str(payload)
+        if resp:
+            self.manager.on_llm_completed(resp)
 
-    def on_speech_completed(self, payload: dict):
-        self.coordinator.handle_speech_completed(payload)
+    def _on_tts_completed(self, payload: Any) -> None:
+        self.manager.on_tts_completed()
+
+    def _on_user_interrupted(self, payload: Any) -> None:
+        self.manager.handle_user_interruption()

@@ -1,8 +1,24 @@
+"""
+Conversation Event Definitions.
+Published to EventBus during voice conversation lifecycle.
+"""
+
 from enum import Enum
 
 
 class ConversationEvent(Enum):
-    """Event definitions for Full Duplex Conversation and Interruption."""
+    """Event definitions for Conversation Engine and Interruption Manager."""
+    CONVERSATION_STARTED = "conversation_started"
+    LISTENING_STARTED = "listening_started"
+    TRANSCRIPTION_COMPLETED = "transcription_completed"
+    LLM_STARTED = "llm_started"
+    LLM_COMPLETED = "llm_completed"
+    TTS_STARTED = "tts_started"
+    TTS_COMPLETED = "tts_completed"
+    CONVERSATION_ENDED = "conversation_ended"
+    CONVERSATION_INTERRUPTED = "conversation_interrupted"
+
+    # Compatibility events
     USER_INTERRUPTED = "user_interrupted"
     LLM_CANCELLED = "llm_cancelled"
     TTS_CANCELLED = "tts_cancelled"

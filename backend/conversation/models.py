@@ -1,21 +1,30 @@
+"""
+Conversation Engine Domain Models.
+Defines ConversationState, ConversationSession, and InterruptionPayload.
+"""
+
+import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, Optional
-import time
 
 
 class ConversationState(Enum):
-    """Full Duplex Conversation State Machine Enum."""
+    """Voice Conversation State Machine Enum."""
     IDLE = "idle"
     LISTENING = "listening"
+    TRANSCRIBING = "transcribing"
     THINKING = "thinking"
-    SPEAKING = "speaking"
+    RESPONDING = "responding"
+    SPEAKING = "speaking"  # Alias for RESPONDING
+    WAITING_FOR_FOLLOWUP = "waiting_for_followup"
     INTERRUPTED = "interrupted"
     ERROR = "error"
 
 
 @dataclass
 class InterruptionPayload:
+    """Telemetry payload recorded when user interrupts active TTS response."""
     session_id: str
     interrupted_state: ConversationState
     interruption_latency_ms: float
@@ -32,11 +41,13 @@ class InterruptionPayload:
 
 @dataclass
 class ConversationSession:
+    """Active voice conversation session tracking."""
     session_id: str
     current_state: ConversationState = ConversationState.IDLE
     start_time: float = field(default_factory=time.time)
     interruption_count: int = 0
     last_turn_timestamp: float = field(default_factory=time.time)
+    turn_count: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -45,4 +56,5 @@ class ConversationSession:
             "start_time": self.start_time,
             "interruption_count": self.interruption_count,
             "last_turn_timestamp": self.last_turn_timestamp,
+            "turn_count": self.turn_count,
         }

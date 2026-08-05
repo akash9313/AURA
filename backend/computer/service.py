@@ -157,3 +157,7 @@ class ComputerService(Service):
                 self.bus.publish(event.value, data)
             except Exception as e:
                 logger.error(f"Failed to publish event '{event.value}': {e}")
+
+
+# Backwards compatibility alias
+ComputerUseService = ComputerService

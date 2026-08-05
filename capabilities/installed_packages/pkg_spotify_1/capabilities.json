@@ -1,0 +1,29 @@
+[
+  {
+    "capability_id": "spotify_control",
+    "name": "Spotify Control",
+    "description": "Controls Spotify playback and playlists",
+    "category": "application",
+    "version": "1.0.0",
+    "inputs": {},
+    "outputs": {},
+    "required_permissions": [],
+    "supported_platforms": [
+      "windows",
+      "linux",
+      "darwin"
+    ],
+    "dependencies": [],
+    "confidence": 0.95,
+    "estimated_duration": 1.0,
+    "is_deprecated": false,
+    "replaced_by": null,
+    "aliases": [
+      "play_spotify",
+      "spotify_play"
+    ],
+    "is_experimental": false,
+    "enabled": true,
+    "priority": 10
+  }
+]

@@ -12,7 +12,7 @@ from browser.service import BrowserService
 from cognition.service import CognitiveService
 from api.service import APIService
 from cloud.service import CloudService
-from computer.service import ComputerUseService
+from computer.service import ComputerService
 from developer.service import DeveloperService
 from knowledge.service import KnowledgeService
 from learning.service import LearningService
@@ -62,7 +62,7 @@ def main():
     engine.register("skills", SkillService(engine.bus))
     engine.register("windows", WindowsService(engine.bus))
     engine.register("browser", BrowserService(engine.bus))
-    engine.register("computer", ComputerUseService(engine.bus))
+    engine.register("computer", ComputerService(engine.bus))
     engine.register("action", ActionService(engine.bus))
     engine.register("runtime", RuntimeService(engine.bus))
 
@@ -77,6 +77,13 @@ def main():
     engine.register("input", InputService(engine.bus))
 
     engine.start()
+
+    try:
+        import time
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("\nShutting down AURA AI Operating System...")
 
 
 if __name__ == "__main__":

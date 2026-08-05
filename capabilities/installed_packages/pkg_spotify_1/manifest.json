@@ -1,0 +1,9 @@
+{
+  "package_id": "pkg_spotify_1",
+  "name": "Spotify Integration Package",
+  "version": "1.0.0",
+  "author": "Dev Team",
+  "description": "",
+  "dependencies": [],
+  "permissions": []
+}

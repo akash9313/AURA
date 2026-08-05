@@ -1,21 +1,28 @@
-from conversation.audio_focus import AudioFocusManager
-from conversation.cancellation import CancellationManager
-from conversation.conversation_state import ConversationStateMachine
-from conversation.coordinator import ConversationCoordinator
+"""
+AURA Voice Conversation Manager Subsystem (`backend/conversation/`).
+Orchestrates multi-turn voice conversation lifecycle, STT, LLM, TTS, interruptions, and follow-up modes.
+"""
+
+from conversation.configuration import ConversationConfig
+from conversation.context import ConversationContext
+from conversation.conversation_manager import ConversationManager
 from conversation.events import ConversationEvent
-from conversation.interruption import InterruptionDetector
+from conversation.interruption import InterruptionHandler
 from conversation.models import ConversationSession, ConversationState, InterruptionPayload
 from conversation.service import ConversationService
+from conversation.state_machine import ConversationStateMachine
+from conversation.timeout_manager import ConversationTimeoutManager
 
 __all__ = [
     "ConversationService",
-    "ConversationCoordinator",
+    "ConversationManager",
     "ConversationStateMachine",
-    "AudioFocusManager",
-    "CancellationManager",
-    "InterruptionDetector",
-    "ConversationEvent",
+    "ConversationTimeoutManager",
+    "InterruptionHandler",
+    "ConversationContext",
+    "ConversationConfig",
     "ConversationState",
-    "InterruptionPayload",
     "ConversationSession",
+    "InterruptionPayload",
+    "ConversationEvent",
 ]

@@ -1,39 +1,57 @@
+"""
+Voice Interruption Handler.
+Detects user speech interruptions while TTS is active, stops TTS immediately, flushes audio queue, and returns to LISTENING.
+"""
+
 import logging
 import time
-from typing import Callable, Optional
-from conversation.models import ConversationState, InterruptionPayload
+from typing import Any, Dict, Optional
 
-logger = logging.getLogger("AURA.Conversation.InterruptionDetector")
+from conversation.events import ConversationEvent
+from conversation.models import ConversationSession, ConversationState, InterruptionPayload
+
+logger = logging.getLogger("AURA.Conversation.Interruption")
 
 
-class InterruptionDetector:
+class InterruptionHandler:
     """
-    Real-Time Speech Interruption Detector.
-    Monitors VAD voice activity and triggers interruption when user speaks during THINKING or SPEAKING states.
+    Handles user speech interruptions during TTS voice responses.
     """
 
-    def __init__(self, on_interruption_fn: Optional[Callable[[InterruptionPayload], None]] = None):
-        self.on_interruption_fn = on_interruption_fn
+    def __init__(self, bus: Any = None):
+        self.bus = bus
 
-    def evaluate_voice_activity(self, current_state: ConversationState, session_id: str) -> Optional[InterruptionPayload]:
-        t0 = time.time()
+    def handle_interruption(
+        self,
+        session: ConversationSession,
+        current_state: ConversationState,
+    ) -> InterruptionPayload:
+        """
+        Stop active TTS output, flush audio queue, and record interruption telemetry.
 
-        if current_state in (ConversationState.THINKING, ConversationState.SPEAKING):
-            dt_ms = (time.time() - t0) * 1000.0
-            logger.info(f"Interruption detected during state '{current_state.value.upper()}' (Latency: {dt_ms:.2f}ms)")
+        Returns:
+            InterruptionPayload object.
+        """
+        start = time.time()
+        logger.info(f"User interrupted active voice response in state '{current_state.value}'!")
+        session.interruption_count += 1
 
-            payload = InterruptionPayload(
-                session_id=session_id,
-                interrupted_state=current_state,
-                interruption_latency_ms=dt_ms
-            )
+        payload = InterruptionPayload(
+            session_id=session.session_id,
+            interrupted_state=current_state,
+            interruption_latency_ms=(time.time() - start) * 1000.0,
+        )
 
-            if self.on_interruption_fn:
-                try:
-                    self.on_interruption_fn(payload)
-                except Exception as e:
-                    logger.error(f"Error executing interruption callback: {e}")
+        self._publish_event(ConversationEvent.USER_INTERRUPTED, payload.to_dict())
+        self._publish_event(ConversationEvent.TTS_CANCELLED, {"session_id": session.session_id})
+        self._publish_event(ConversationEvent.AUDIO_QUEUE_FLUSHED, {"session_id": session.session_id})
+        self._publish_event(ConversationEvent.CONVERSATION_INTERRUPTED, payload.to_dict())
 
-            return payload
+        return payload
 
-        return None
+    def _publish_event(self, event: ConversationEvent, data: Dict[str, Any]) -> None:
+        if self.bus:
+            try:
+                self.bus.publish(event.value, data)
+            except Exception as e:
+                logger.error(f"Failed to publish interruption event '{event.value}': {e}")

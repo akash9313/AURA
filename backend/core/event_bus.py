@@ -1,6 +1,12 @@
 from collections import defaultdict
 
 
+# High-frequency events that should not flood console output
+_SUPPRESSED_EVENTS = {
+    "AUDIO_CHUNK", "silence_detected", "MIC_STARTED",
+}
+
+
 class EventBus:
 
     def __init__(self):
@@ -14,9 +20,10 @@ class EventBus:
     def publish(self, event, data=None):
 
         event_name = event.name if hasattr(event, "name") else str(event)
-        print(f"[EVENT] -> {event_name}")
 
+        if event_name not in _SUPPRESSED_EVENTS:
+            print(f"[EVENT] -> {event_name}")
 
         for callback in self.listeners[event]:
 
-            callback(data)
+            callback(data)
